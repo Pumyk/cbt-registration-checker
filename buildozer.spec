@@ -26,14 +26,11 @@ android.permissions = INTERNET
 bootstrap = sdl2
 build_arch = arm64-v8a,armeabi-v7a
 
-# Landscape
-android.api = 34
+# SDK/NDK
+android.api = 33
 android.minapi = 24
-android.ndk = 26b
+android.ndk = 25b
 android.accept_sdk_license = True
 
 # Logging
 log_level = 2
-
-# Copy libs
-android.add_src = 
