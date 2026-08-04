@@ -4,6 +4,10 @@ A simple app where each student checks their own registration status
 on the UNI UYO CBT portal and can share it with their class rep.
 """
 
+import os
+import datetime
+import traceback
+
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -11,12 +15,9 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
-from kivy.core.window import Window
 from kivy.utils import get_color_from_hex
 from kivy.clock import Clock
 from kivy.metrics import dp
-import os
-import datetime
 
 try:
     from android.permissions import request_permissions, Permission
@@ -34,9 +35,6 @@ WARN   = get_color_from_hex("#F59E0B")
 ERROR  = get_color_from_hex("#EF4444")
 WHITE  = get_color_from_hex("#F1F5F9")
 GREY   = get_color_from_hex("#94A3B8")
-
-# NOTE: Do NOT set Window.clearcolor at module level — causes crash on Android
-# It's set in on_start() instead
 
 PORTAL_URL = "https://cbt.uniuyo.edu.ng/auth"
 
@@ -236,13 +234,18 @@ class CBTCheckerApp(App):
         return sm
 
     def on_start(self):
-        # Set background color here — safe because window is ready
-        Window.clearcolor = BG
+        # Set background color — import Window lazily to avoid import-time crash
+        try:
+            from kivy.core.window import Window
+            Window.clearcolor = BG
+        except Exception:
+            pass
 
         if ANDROID:
-            request_permissions([
-                Permission.INTERNET,
-            ])
+            try:
+                request_permissions([Permission.INTERNET])
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
