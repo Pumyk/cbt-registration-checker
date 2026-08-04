@@ -35,7 +35,8 @@ ERROR  = get_color_from_hex("#EF4444")
 WHITE  = get_color_from_hex("#F1F5F9")
 GREY   = get_color_from_hex("#94A3B8")
 
-Window.clearcolor = BG
+# NOTE: Do NOT set Window.clearcolor at module level — causes crash on Android
+# It's set in on_start() instead
 
 PORTAL_URL = "https://cbt.uniuyo.edu.ng/auth"
 
@@ -235,6 +236,9 @@ class CBTCheckerApp(App):
         return sm
 
     def on_start(self):
+        # Set background color here — safe because window is ready
+        Window.clearcolor = BG
+
         if ANDROID:
             request_permissions([
                 Permission.INTERNET,
