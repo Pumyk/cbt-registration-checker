@@ -5,7 +5,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Grant write permissions for releases
 permissions:
   contents: write
 
@@ -48,7 +47,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v11
+          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v12
           restore-keys: |
             buildozer-cbt-${{ runner.os }}-
 
@@ -86,7 +85,7 @@ jobs:
           echo "$BSDK/platform-tools" >> $GITHUB_PATH
           echo "$BSDK/tools/bin" >> $GITHUB_PATH
 
-      - name: Set up NDK (symlink system r27 as r25b)
+      - name: Point buildozer at system NDK (skip download)
         run: |
           NDK_SRC=/usr/local/lib/android/sdk/ndk/27.3.13750724
           NDK_DEST=$HOME/.buildozer/android/platform/android-ndk-r25b
@@ -97,59 +96,6 @@ jobs:
           fi
 
           ls $NDK_DEST/toolchains && echo "NDK OK"
-
-      - name: Pre-clone and patch python-for-android (Python 3.12.10)
-        run: |
-          P4A_DIR=/tmp/p4a-patched
-
-          rm -rf "$P4A_DIR"
-          git clone --depth 1 https://github.com/kivy/python-for-android.git "$P4A_DIR"
-
-          # Patch python3 recipe: use 3.12.10 instead of 3.14.2
-          PY3_FILE="$P4A_DIR/pythonforandroid/recipes/python3/__init__.py"
-          sed -i "s/version = '3.14.2'/version = '3.12.10'/" "$PY3_FILE"
-          sed -i "s|url = 'https://github.com/python/cpython/archive/refs/tags/v{version}.tar.gz'|url = 'https://www.python.org/ftp/python/{version}/Python-{version}.tgz'|" "$PY3_FILE"
-
-          # Patch hostpython3 recipe
-          HPY_FILE="$P4A_DIR/pythonforandroid/recipes/hostpython3/__init__.py"
-          sed -i 's/version = "3.14.2"/version = "3.12.10"/' "$HPY_FILE"
-          sed -i 's|url = "https://github.com/python/cpython/archive/refs/tags/v{version}.tar.gz"|url = "https://www.python.org/ftp/python/{version}/Python-{version}.tgz"|' "$HPY_FILE"
-          sed -i 's/patches = \["fix_ensurepip.patch"\]/patches = []/' "$HPY_FILE"
-
-          # Patch libthorvg recipe: disable completely (SVG not needed)
-          THORVG_FILE="$P4A_DIR/pythonforandroid/recipes/libthorvg/__init__.py"
-          if [ -f "$THORVG_FILE" ]; then
-            THORVG_CLASS=$(grep -m1 'class ' "$THORVG_FILE" | sed 's/class \([A-Za-z0-9_]*\).*/\1/')
-            printf '\n# PATCH: Disable libthorvg (SVG not needed for this app)\n' >> "$THORVG_FILE"
-            printf '%s.built_libraries = {}\n' "$THORVG_CLASS" >> "$THORVG_FILE"
-            printf '%s.build_arch = lambda self, arch: None\n' "$THORVG_CLASS" >> "$THORVG_FILE"
-            printf '%s.install_libraries = lambda self, arch: None\n' "$THORVG_CLASS" >> "$THORVG_FILE"
-            printf '%s.postbuild_arch = lambda self, arch: None\n' "$THORVG_CLASS" >> "$THORVG_FILE"
-            printf '%s.get_include_dir = lambda self, arch: ""\n' "$THORVG_CLASS" >> "$THORVG_FILE"
-            printf '%s.get_include_dirs = lambda self, arch: []\n' "$THORVG_CLASS" >> "$THORVG_FILE"
-            printf '# END PATCH\n' >> "$THORVG_FILE"
-            echo "Patched libthorvg ($THORVG_CLASS) with no-op methods"
-          fi
-
-          # Patch thorvg-python recipe
-          THORVGPY_FILE="$P4A_DIR/pythonforandroid/recipes/thorvg-python/__init__.py"
-          if [ -f "$THORVGPY_FILE" ]; then
-            THORVGPY_CLASS=$(grep -m1 'class ' "$THORVGPY_FILE" | sed 's/class \([A-Za-z0-9_]*\).*/\1/')
-            printf '\n# PATCH: Disable thorvg-python\n' >> "$THORVGPY_FILE"
-            printf '%s.build_arch = lambda self, arch: None\n' "$THORVGPY_CLASS" >> "$THORVGPY_FILE"
-            printf '%s.install_libraries = lambda self, arch: None\n' "$THORVGPY_CLASS" >> "$THORVGPY_FILE"
-            printf '%s.postbuild_arch = lambda self, arch: None\n' "$THORVGPY_CLASS" >> "$THORVGPY_FILE"
-            printf '# END PATCH\n' >> "$THORVGPY_FILE"
-            echo "Patched thorvg-python ($THORVGPY_CLASS) with no-op methods"
-          fi
-
-          echo "=== python3 recipe ==="
-          grep "version =\|url =" "$PY3_FILE" | head -2
-          echo "=== hostpython3 recipe ==="
-          grep "version =\|url =\|patches =" "$HPY_FILE" | head -3
-          echo "=== libthorvg tail ==="
-          tail -10 "$THORVG_FILE" 2>/dev/null || echo "No libthorvg"
-          echo "=== p4a patches OK ==="
 
       - name: Build APK (with retries)
         run: |
