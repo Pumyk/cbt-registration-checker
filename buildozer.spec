@@ -12,8 +12,12 @@ source.include_exts = py,png,jpg,kv,atlas
 # Version
 version = 1.0
 
-# Requirements - pin both python3 and hostpython3 to 3.12.10
-requirements = python3==3.12.10,hostpython3==3.12.10,kivy==2.3.1,android
+# Requirements
+requirements = python3,kivy==2.3.1,android
+
+# Pin python-for-android to a release that uses Python 3.11.5
+# (newer releases use 3.14.2 which has pip incompatibility issues)
+p4a.branch = v2024.01.21
 
 # Android config
 orientation = portrait
