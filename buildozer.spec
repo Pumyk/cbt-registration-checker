@@ -12,8 +12,8 @@ source.include_exts = py,png,jpg,kv,atlas
 # Version
 version = 1.0
 
-# Requirements
-requirements = python3,kivy==2.3.1,android
+# Requirements - pin python3 to avoid 3.14 pip incompatibility
+requirements = python3==3.12.10,kivy==2.3.1,android
 
 # Android config
 orientation = portrait
@@ -28,7 +28,7 @@ build_arch = arm64-v8a,armeabi-v7a
 
 # SDK/NDK
 android.api = 33
-android.minapi = 24
+android.minapi = 26
 android.ndk = 25b
 android.accept_sdk_license = True
 
