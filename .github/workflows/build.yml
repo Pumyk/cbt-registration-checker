@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v8
+          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v9
           restore-keys: |
             buildozer-cbt-${{ runner.os }}-
 
@@ -115,16 +115,63 @@ jobs:
           HPY_FILE="$P4A_DIR/pythonforandroid/recipes/hostpython3/__init__.py"
           sed -i 's/version = "3.14.2"/version = "3.12.10"/' "$HPY_FILE"
           sed -i 's|url = "https://github.com/python/cpython/archive/refs/tags/v{version}.tar.gz"|url = "https://www.python.org/ftp/python/{version}/Python-{version}.tgz"|' "$HPY_FILE"
-
           # Remove the 3.14-specific ensurepip patch (not compatible with 3.12)
           sed -i 's/patches = \["fix_ensurepip.patch"\]/patches = []/' "$HPY_FILE"
+
+          # Fix libthorvg recipe bug (IndexError: list index out of range)
+          # Replace the broken recipe with a minimal no-op version
+          THORVG_DIR="$P4A_DIR/pythonforandroid/recipes/libthorvg"
+          if [ -d "$THORVG_DIR" ]; then
+            cat > "$THORVG_DIR/__init__.py" << 'RECIPE_EOF'
+from pythonforandroid.recipe import Recipe
+from pythonforandroid.logger import shprint
+from pythonforandroid.util import current_directory
+import sh
+
+
+class LibThorVGRecipe(Recipe):
+    """Minimal no-op libthorvg recipe (SVG support disabled)."""
+    version = "0.14.4"
+    url = "https://github.com/thorvg/thorvg/archive/v{version}.tar.gz"
+
+    def build_arch(self, arch):
+        pass  # Skip building - not needed for this app
+
+
+recipe = LibThorVGRecipe()
+RECIPE_EOF
+            echo "Patched libthorvg recipe (no-op)"
+          fi
+
+          # Also patch thorvg-python recipe if it exists
+          THORVGPY_DIR="$P4A_DIR/pythonforandroid/recipes/thorvg-python"
+          if [ -d "$THORVGPY_DIR" ]; then
+            cat > "$THORVGPY_DIR/__init__.py" << 'RECIPE_EOF'
+from pythonforandroid.recipe import Recipe
+
+
+class ThorVGPythonRecipe(Recipe):
+    """Minimal no-op thorvg-python recipe."""
+    version = "0.1.0"
+    url = ""
+
+    def build_arch(self, arch):
+        pass  # Skip building
+
+
+recipe = ThorVGPythonRecipe()
+RECIPE_EOF
+            echo "Patched thorvg-python recipe (no-op)"
+          fi
 
           # Verify the patches
           echo "=== python3 recipe ==="
           grep "version =\|url =" "$PY3_FILE" | head -2
           echo "=== hostpython3 recipe ==="
           grep "version =\|url =\|patches =" "$HPY_FILE" | head -3
-          echo "=== p4a clone OK ==="
+          echo "=== libthorvg recipe ==="
+          head -5 "$THORVG_DIR/__init__.py"
+          echo "=== p4a clone + patches OK ==="
 
       - name: Build APK (with retries)
         run: |
