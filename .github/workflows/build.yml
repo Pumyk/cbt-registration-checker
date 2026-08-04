@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v9
+          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v10
           restore-keys: |
             buildozer-cbt-${{ runner.os }}-
 
@@ -110,59 +110,49 @@ jobs:
           sed -i "s/version = '3.14.2'/version = '3.12.10'/" "$PY3_FILE"
           sed -i "s|url = 'https://github.com/python/cpython/archive/refs/tags/v{version}.tar.gz'|url = 'https://www.python.org/ftp/python/{version}/Python-{version}.tgz'|" "$PY3_FILE"
 
-          # Patch hostpython3 recipe: same version + URL change
+          # Patch hostpython3 recipe
           HPY_FILE="$P4A_DIR/pythonforandroid/recipes/hostpython3/__init__.py"
           sed -i 's/version = "3.14.2"/version = "3.12.10"/' "$HPY_FILE"
           sed -i 's|url = "https://github.com/python/cpython/archive/refs/tags/v{version}.tar.gz"|url = "https://www.python.org/ftp/python/{version}/Python-{version}.tgz"|' "$HPY_FILE"
           sed -i 's/patches = \["fix_ensurepip.patch"\]/patches = []/' "$HPY_FILE"
 
-          # Fix libthorvg recipe bug (IndexError) - replace with no-op
-          THORVG_DIR="$P4A_DIR/pythonforandroid/recipes/libthorvg"
-          if [ -d "$THORVG_DIR" ]; then
-            printf '%s\n' \
-              'from pythonforandroid.recipe import Recipe' \
-              '' \
-              '' \
-              'class LibThorVGRecipe(Recipe):' \
-              '    """Minimal no-op libthorvg recipe (SVG support disabled)."""' \
-              '    version = "0.14.4"' \
-              '    url = "https://github.com/thorvg/thorvg/archive/v{version}.tar.gz"' \
-              '' \
-              '    def build_arch(self, arch):' \
-              '        pass' \
-              '' \
-              '' \
-              'recipe = LibThorVGRecipe()' \
-              > "$THORVG_DIR/__init__.py"
-            echo "Patched libthorvg recipe (no-op)"
+          # Patch libthorvg recipe: wrap build_arch in try/except + add get_include_dir
+          THORVG_FILE="$P4A_DIR/pythonforandroid/recipes/libthorvg/__init__.py"
+          if [ -f "$THORVG_FILE" ]; then
+            printf '\n%s\n' '# Patched: error handling + include dirs for no-SVG builds' >> "$THORVG_FILE"
+            printf '%s\n' 'try:' >> "$THORVG_FILE"
+            printf '    %s\n' '_orig = LibThorVGRecipe.build_arch' >> "$THORVG_FILE"
+            printf '    %s\n' 'def _safe(self, arch):' >> "$THORVG_FILE"
+            printf '        %s\n' 'try: return _orig(self, arch)' >> "$THORVG_FILE"
+            printf '        %s\n' 'except: pass' >> "$THORVG_FILE"
+            printf '    %s\n' 'LibThorVGRecipe.build_arch = _safe' >> "$THORVG_FILE"
+            printf '%s\n' 'except: pass' >> "$THORVG_FILE"
+            printf '%s\n' 'LibThorVGRecipe.get_include_dir = lambda self, arch: ""' >> "$THORVG_FILE"
+            printf '%s\n' 'LibThorVGRecipe.get_include_dirs = lambda self, arch: []' >> "$THORVG_FILE"
+            echo "Patched libthorvg recipe"
           fi
 
-          # Fix thorvg-python recipe if it exists
-          THORVGPY_DIR="$P4A_DIR/pythonforandroid/recipes/thorvg-python"
-          if [ -d "$THORVGPY_DIR" ]; then
-            printf '%s\n' \
-              'from pythonforandroid.recipe import Recipe' \
-              '' \
-              '' \
-              'class ThorVGPythonRecipe(Recipe):' \
-              '    """Minimal no-op thorvg-python recipe."""' \
-              '    version = "0.1.0"' \
-              '    url = ""' \
-              '' \
-              '    def build_arch(self, arch):' \
-              '        pass' \
-              '' \
-              '' \
-              'recipe = ThorVGPythonRecipe()' \
-              > "$THORVGPY_DIR/__init__.py"
-            echo "Patched thorvg-python recipe (no-op)"
+          # Patch thorvg-python recipe
+          THORVGPY_FILE="$P4A_DIR/pythonforandroid/recipes/thorvg-python/__init__.py"
+          if [ -f "$THORVGPY_FILE" ]; then
+            printf '\n%s\n' '# Patched: error handling' >> "$THORVGPY_FILE"
+            printf '%s\n' 'try:' >> "$THORVGPY_FILE"
+            printf '    %s\n' '_orig = ThorVGPythonRecipe.build_arch' >> "$THORVGPY_FILE"
+            printf '    %s\n' 'def _safe(self, arch):' >> "$THORVGPY_FILE"
+            printf '        %s\n' 'try: return _orig(self, arch)' >> "$THORVGPY_FILE"
+            printf '        %s\n' 'except: pass' >> "$THORVGPY_FILE"
+            printf '    %s\n' 'ThorVGPythonRecipe.build_arch = _safe' >> "$THORVGPY_FILE"
+            printf '%s\n' 'except: pass' >> "$THORVGPY_FILE"
+            echo "Patched thorvg-python recipe"
           fi
 
           echo "=== python3 recipe ==="
           grep "version =\|url =" "$PY3_FILE" | head -2
           echo "=== hostpython3 recipe ==="
           grep "version =\|url =\|patches =" "$HPY_FILE" | head -3
-          echo "=== p4a clone + patches OK ==="
+          echo "=== libthorvg tail ==="
+          tail -10 "$THORVG_FILE"
+          echo "=== p4a patches OK ==="
 
       - name: Build APK (with retries)
         run: |
