@@ -1,3 +1,4 @@
+# v1.2 - CBT Registration Checker
 """
 CBT Registration Checker
 A simple app where each student checks their own registration status
