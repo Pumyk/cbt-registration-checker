@@ -44,7 +44,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v5
+          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v6
           restore-keys: |
             buildozer-cbt-${{ runner.os }}-
 
@@ -82,19 +82,32 @@ jobs:
           echo "$BSDK/platform-tools" >> $GITHUB_PATH
           echo "$BSDK/tools/bin" >> $GITHUB_PATH
 
-      - name: Point buildozer at system NDK (skip download)
+      - name: Download NDK r25b (real, not symlinked r27)
         run: |
-          NDK_SRC=/usr/local/lib/android/sdk/ndk/27.3.13750724
           NDK_DEST=$HOME/.buildozer/android/platform/android-ndk-r25b
 
-          if [ ! -d "$NDK_DEST" ]; then
-            echo "Symlinking system NDK to $NDK_DEST"
-            ln -s $NDK_SRC $NDK_DEST
-          else
-            echo "NDK already in place"
+          if [ -d "$NDK_DEST" ] && [ ! -L "$NDK_DEST" ]; then
+            echo "Real NDK r25b already in place"
+            ls $NDK_DEST/toolchains && echo "NDK OK"
+            exit 0
           fi
 
-          ls $NDK_DEST/toolchains && echo "NDK OK"
+          # Remove old symlink if exists
+          rm -f "$NDK_DEST"
+
+          echo "Downloading real NDK r25b..."
+          wget -q --tries=5 --retry-connrefused \
+            https://dl.google.com/android/repository/android-ndk-r25b-linux.zip \
+            -O /tmp/ndk.zip
+
+          echo "Extracting NDK r25b..."
+          unzip -q /tmp/ndk.zip -d /tmp/ndk-extract
+
+          mv /tmp/ndk-extract/android-ndk-r25b "$NDK_DEST"
+          rm -f /tmp/ndk.zip
+          rm -rf /tmp/ndk-extract
+
+          ls $NDK_DEST/toolchains && echo "NDK r25b OK"
 
       - name: Build APK (with retries)
         run: |
