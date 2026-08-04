@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v10
+          key: buildozer-cbt-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v11
           restore-keys: |
             buildozer-cbt-${{ runner.os }}-
 
@@ -116,34 +116,31 @@ jobs:
           sed -i 's|url = "https://github.com/python/cpython/archive/refs/tags/v{version}.tar.gz"|url = "https://www.python.org/ftp/python/{version}/Python-{version}.tgz"|' "$HPY_FILE"
           sed -i 's/patches = \["fix_ensurepip.patch"\]/patches = []/' "$HPY_FILE"
 
-          # Patch libthorvg recipe: wrap build_arch in try/except + add get_include_dir
+          # Patch libthorvg recipe: disable completely (SVG not needed)
           THORVG_FILE="$P4A_DIR/pythonforandroid/recipes/libthorvg/__init__.py"
           if [ -f "$THORVG_FILE" ]; then
-            printf '\n%s\n' '# Patched: error handling + include dirs for no-SVG builds' >> "$THORVG_FILE"
-            printf '%s\n' 'try:' >> "$THORVG_FILE"
-            printf '    %s\n' '_orig = LibThorVGRecipe.build_arch' >> "$THORVG_FILE"
-            printf '    %s\n' 'def _safe(self, arch):' >> "$THORVG_FILE"
-            printf '        %s\n' 'try: return _orig(self, arch)' >> "$THORVG_FILE"
-            printf '        %s\n' 'except: pass' >> "$THORVG_FILE"
-            printf '    %s\n' 'LibThorVGRecipe.build_arch = _safe' >> "$THORVG_FILE"
-            printf '%s\n' 'except: pass' >> "$THORVG_FILE"
-            printf '%s\n' 'LibThorVGRecipe.get_include_dir = lambda self, arch: ""' >> "$THORVG_FILE"
-            printf '%s\n' 'LibThorVGRecipe.get_include_dirs = lambda self, arch: []' >> "$THORVG_FILE"
-            echo "Patched libthorvg recipe"
+            THORVG_CLASS=$(grep -m1 'class ' "$THORVG_FILE" | sed 's/class \([A-Za-z0-9_]*\).*/\1/')
+            printf '\n# PATCH: Disable libthorvg (SVG not needed for this app)\n' >> "$THORVG_FILE"
+            printf '%s.built_libraries = {}\n' "$THORVG_CLASS" >> "$THORVG_FILE"
+            printf '%s.build_arch = lambda self, arch: None\n' "$THORVG_CLASS" >> "$THORVG_FILE"
+            printf '%s.install_libraries = lambda self, arch: None\n' "$THORVG_CLASS" >> "$THORVG_FILE"
+            printf '%s.postbuild_arch = lambda self, arch: None\n' "$THORVG_CLASS" >> "$THORVG_FILE"
+            printf '%s.get_include_dir = lambda self, arch: ""\n' "$THORVG_CLASS" >> "$THORVG_FILE"
+            printf '%s.get_include_dirs = lambda self, arch: []\n' "$THORVG_CLASS" >> "$THORVG_FILE"
+            printf '# END PATCH\n' >> "$THORVG_FILE"
+            echo "Patched libthorvg ($THORVG_CLASS) with no-op methods"
           fi
 
           # Patch thorvg-python recipe
           THORVGPY_FILE="$P4A_DIR/pythonforandroid/recipes/thorvg-python/__init__.py"
           if [ -f "$THORVGPY_FILE" ]; then
-            printf '\n%s\n' '# Patched: error handling' >> "$THORVGPY_FILE"
-            printf '%s\n' 'try:' >> "$THORVGPY_FILE"
-            printf '    %s\n' '_orig = ThorVGPythonRecipe.build_arch' >> "$THORVGPY_FILE"
-            printf '    %s\n' 'def _safe(self, arch):' >> "$THORVGPY_FILE"
-            printf '        %s\n' 'try: return _orig(self, arch)' >> "$THORVGPY_FILE"
-            printf '        %s\n' 'except: pass' >> "$THORVGPY_FILE"
-            printf '    %s\n' 'ThorVGPythonRecipe.build_arch = _safe' >> "$THORVGPY_FILE"
-            printf '%s\n' 'except: pass' >> "$THORVGPY_FILE"
-            echo "Patched thorvg-python recipe"
+            THORVGPY_CLASS=$(grep -m1 'class ' "$THORVGPY_FILE" | sed 's/class \([A-Za-z0-9_]*\).*/\1/')
+            printf '\n# PATCH: Disable thorvg-python\n' >> "$THORVGPY_FILE"
+            printf '%s.build_arch = lambda self, arch: None\n' "$THORVGPY_CLASS" >> "$THORVGPY_FILE"
+            printf '%s.install_libraries = lambda self, arch: None\n' "$THORVGPY_CLASS" >> "$THORVGPY_FILE"
+            printf '%s.postbuild_arch = lambda self, arch: None\n' "$THORVGPY_CLASS" >> "$THORVGPY_FILE"
+            printf '# END PATCH\n' >> "$THORVGPY_FILE"
+            echo "Patched thorvg-python ($THORVGPY_CLASS) with no-op methods"
           fi
 
           echo "=== python3 recipe ==="
@@ -151,7 +148,7 @@ jobs:
           echo "=== hostpython3 recipe ==="
           grep "version =\|url =\|patches =" "$HPY_FILE" | head -3
           echo "=== libthorvg tail ==="
-          tail -10 "$THORVG_FILE"
+          tail -10 "$THORVG_FILE" 2>/dev/null || echo "No libthorvg"
           echo "=== p4a patches OK ==="
 
       - name: Build APK (with retries)
